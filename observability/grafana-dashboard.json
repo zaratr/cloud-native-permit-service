@@ -1,0 +1,94 @@
+{
+  "title": "Connection-Lifecycle — eBPF Tracer",
+  "description": "Zero-instrumentation TCP connection-health metrics. All data captured via eBPF probes on tcp_v4_connect and tcp_set_state — no SDK changes required. The reset rate is the key failure signal: a burst indicates a cascading connection failure or an unhealthy dependency.",
+  "schemaVersion": 38,
+  "tags": ["ebpf", "connections", "zero-instrumentation", "reliability"],
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Connection Resets / sec (the failure signal)",
+      "description": "Rate of TCP connections closing with a reset / handshake failure, by destination. A spike here is the signature of a cascading connection failure or a dependency going unhealthy. This is the panel to alert on.",
+      "targets": [
+        {
+          "expr": "sum(rate(conn_resets_total[1m])) by (dest_addr, dest_port)",
+          "legendFormat": "{{dest_addr}}:{{dest_port}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Connection Opens / sec by Destination",
+      "description": "Outbound connect() attempts per second. Compare against resets to compute a failure ratio; a rising open rate with flat establishes suggests SYN drops or a port-closed peer.",
+      "targets": [
+        {
+          "expr": "sum(rate(conn_opens_total[1m])) by (dest_addr, dest_port)",
+          "legendFormat": "{{dest_addr}}:{{dest_port}}"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Active In-Flight Connections",
+      "description": "Currently-tracked outbound connections (SYN_SENT or ESTABLISHED). A sudden drop to zero indicates mass connection failure; a steady climb without release suggests a connection leak.",
+      "targets": [
+        {
+          "expr": "conn_active",
+          "legendFormat": "active"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Established Connection Duration (s)",
+      "description": "Wall-clock open→close duration distribution. A shift toward the left (shorter durations) reveals connection churn — e.g. a missing keep-alive causing rapid reconnect cycles.",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(conn_established_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p50"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(conn_established_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(conn_established_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p99"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Reset Rate (all destinations)",
+      "description": "Aggregate resets per second across all peers. Use as a single-number health KPI; alert when this exceeds the baseline.",
+      "targets": [
+        {
+          "expr": "sum(rate(conn_resets_total[1m]))"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "Total Resets Captured",
+      "targets": [
+        {
+          "expr": "sum(conn_resets_total)"
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Top Destinations by Reset Count",
+      "description": "Which dependency is failing the most. Sort descending to find the unhealthy peer.",
+      "targets": [
+        {
+          "expr": "topk(10, sum by (dest_addr, dest_port) (conn_resets_total))",
+          "format": "table",
+          "instant": true
+        }
+      ]
+    }
+  ],
+  "datasource": "Prometheus",
+  "refresh": "10s",
+  "time": { "from": "now-15m", "to": "now" }
+}
