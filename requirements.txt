@@ -1,0 +1,21 @@
+# eBPF connection-lifecycle tracer — runtime dependencies.
+#
+# bcc requires a Linux kernel (5.8+ for BPF ring buffers) and is NOT pip-
+# installable on Windows/macOS. On those platforms, or in CI without a kernel,
+# run the tracer with --simulate, which needs only prometheus_client.
+#
+# Linux install (real mode):
+#   sudo apt install bpfcc-tools linux-headers-$(uname -r)
+#   pip install -r requirements.txt
+#
+# Any platform (simulation mode):
+#   pip install prometheus_client
+
+# bcc is intentionally not pinned here: it is installed via the system package
+# manager (bpfcc-tools on Debian/Ubuntu) rather than from PyPI in most setups.
+# Add `bcc` to this file only if you install it from a wheel on your distro.
+
+prometheus_client>=0.16
+
+# Test-only (install with: pip install -r requirements-dev.txt)
+# pytest>=7.0
